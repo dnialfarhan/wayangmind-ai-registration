@@ -235,6 +235,15 @@
         </form>
     </div>
 
+    <!-- Registration Dialog -->
+    <div id="registrationDialog" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50 hidden">
+      <div class="bg-white rounded-xl shadow-lg p-8 max-w-sm w-full text-center">
+        <h2 id="dialogTitle" class="text-xl font-bold mb-4"></h2>
+        <p id="dialogMessage" class="mb-6"></p>
+        <button id="dialogCloseBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none">OK</button>
+      </div>
+    </div>
+
     <script>
         // This script handles the logic for showing/hiding conditional text fields.
 
@@ -287,6 +296,95 @@
             setupConditionalSelectField('religion', 'religion_other_details');
             setupConditionalSelectField('education', 'education_other_details');
         });
+    </script>
+
+    <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCRjNip7BbsXrb_-wnkNpZ8dzWB6VcV9q4",
+      authDomain: "wayangmind-vr.firebaseapp.com",
+      databaseURL: "https://wayangmind-vr-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "wayangmind-vr",
+      storageBucket: "wayangmind-vr.firebasestorage.app",
+      messagingSenderId: "1008615268268",
+      appId: "1:1008615268268:web:3a6b923bd74ab5abca6409",
+      measurementId: "G-EDFR9XVXRD"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    function getFormData(form) {
+      const data = {};
+      const formData = new FormData(form);
+      for (const [key, value] of formData.entries()) {
+        if (key.endsWith('[]')) {
+          const realKey = key.slice(0, -2);
+          if (!data[realKey]) data[realKey] = [];
+          data[realKey].push(value);
+        } else {
+          data[key] = value;
+        }
+      }
+      return data;
+    }
+
+    function showDialog(title, message) {
+      const dialog = document.getElementById('registrationDialog');
+      document.getElementById('dialogTitle').textContent = title;
+      document.getElementById('dialogMessage').innerHTML = message;
+      dialog.classList.remove('hidden');
+      document.getElementById('dialogCloseBtn').onclick = () => {
+        dialog.classList.add('hidden');
+      };
+    }
+
+    // Generate a random 4-digit code as a string
+    function generateCode() {
+      return Math.floor(1000 + Math.random() * 9000).toString();
+    }
+
+    // Ensure the code is unique in the database (try up to 10 times)
+    async function getUniqueCode() {
+      let code, snapshot, attempts = 0;
+      do {
+        code = generateCode();
+        snapshot = await get(child(ref(db), 'registrations/' + code));
+        attempts++;
+        if (attempts > 10) throw new Error('Unable to generate unique code. Please try again.');
+      } while (snapshot.exists());
+      return code;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.querySelector('form');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = getFormData(form);
+        const userName = data.name || "Participant";
+
+        try {
+          const code = await getUniqueCode();
+          data.code = code;
+          await set(ref(db, 'registrations/' + code), data);
+          form.reset();
+          document.querySelectorAll('textarea').forEach(t => t.classList.add('hidden'));
+          showDialog(
+            "Registration Successful",
+            `<span class="font-semibold">Thank you, ${userName}!</span><br>Your unique code is <span class="font-mono text-blue-600 text-lg">${code}</span>.`
+          );
+        } catch (error) {
+          showDialog(
+            "Registration Failed",
+            error.message.includes('unique code')
+              ? "A unique code could not be generated. Please try submitting the form again."
+              : "Error submitting registration: " + error.message
+          );
+        }
+      });
+    });
     </script>
 </body>
 </html>
